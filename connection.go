@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"regexp"
-
+  "strings"
 	"github.com/chzyer/readline"
 	"github.com/fatih/color"
 	"github.com/gorilla/websocket"
@@ -16,9 +16,10 @@ type session struct {
 	ws      *websocket.Conn
 	rl      *readline.Instance
 	errChan chan error
+  filter string
 }
 
-func connect(url, origin string, rlConf *readline.Config, allowInsecure bool) error {
+func connect(url, origin string, rlConf *readline.Config, allowInsecure bool, filter string) error {
 	headers := make(http.Header)
 	headers.Add("Origin", origin)
 
@@ -43,6 +44,7 @@ func connect(url, origin string, rlConf *readline.Config, allowInsecure bool) er
 		ws:      ws,
 		rl:      rl,
 		errChan: make(chan error),
+    filter: filter,
 	}
 
 	go sess.readConsole()
@@ -86,13 +88,18 @@ func (s *session) readWebsocket() {
 		switch msgType {
 		case websocket.TextMessage:
 			text = string(buf)
+      if strings.Contains(text, s.filter) {
+		    fmt.Fprint(s.rl.Stdout(), rxSprintf("< %s\n", text))
+      }
+      text = ""
 		case websocket.BinaryMessage:
 			text = bytesToFormattedHex(buf)
 		default:
 			s.errChan <- fmt.Errorf("unknown websocket frame type: %d", msgType)
 			return
 		}
-
-		fmt.Fprint(s.rl.Stdout(), rxSprintf("< %s\n", text))
+    if len(text) > 0 {
+		  fmt.Fprint(s.rl.Stdout(), rxSprintf("< %s\n", text))
+    }
 	}
 }
